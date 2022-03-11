@@ -1,3 +1,3 @@
 # AMLCS
-<img src="https://enino84.github.io/aml_cs.png">
+<img src="https://aml-cs.github.io/images/logo.jpg">
 AMLCS Package described in our Arxiv Report
