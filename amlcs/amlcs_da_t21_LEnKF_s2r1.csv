@@ -1,0 +1,2 @@
+r,s,res_name,method,exp_settings,infla,err_obs,obs_plc,list_snapshots,code,option_mask
+1,5,t21,LEnKF  ,../NLD_Paper/t21_80_0.05_30/,1.08,"1, 1, 1, 1e-3, 0.1, 1, 1, 1, 1e-3, 0.1","1,1,1,1,1,1,1,1,1,1","0,10,20,29",,2

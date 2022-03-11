@@ -1,0 +1,2 @@
+r,s,res_name,method,exp_settings,infla,err_obs,obs_plc,list_snapshots,code,option_mask
+5,2,t21,EnKF_MC_obs,../NLD_Paper/t21_80_0.05_120/,1.04,"1, 1, 1, 1e-3, 0.1, 1, 1, 1, 1e-3, 0.1","1,1,1,1,1,1,1,1,1,1","0,10,100,119",,2

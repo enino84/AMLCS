@@ -1,0 +1,1 @@
+Once all libraries are installed (i.e., gfortran, sklearn, etc.), copy the to_run files folders into the amlcs folder to run a single experiment for each sequential data assimilation method.

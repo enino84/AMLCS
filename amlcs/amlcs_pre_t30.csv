@@ -1,0 +1,2 @@
+Nens,M,res_name,per,obs_steps,ini_steps,ini_times,syn_tests,folder_prep,code,par,option_mask
+80,360,t30,0.05,1,3,12,True,../AMC_Paper,,True,2

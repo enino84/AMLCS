@@ -1,0 +1,7 @@
+experiment_name,resolution,type,times,level,variable
+t21_80_0.05_30_EnKF_MC_obs_1_2_102_mask_2,t21,free_run,"0,5,15,20",,
+t21_80_0.05_30_LETKF_1_2_102_mask_2,t21,free_run,"0,5,15,20",,
+t21_80_0.05_30_LEnKF_1_2_102_mask_2,t21,free_run,"0,5,15,20",,
+t21_80_0.05_30_EnKF_MC_obs_1_2_102_mask_2,t21,reference,"0,5,15,20",,
+t21_80_0.05_30_LETKF_1_2_102_mask_2,t21,reference,"0,5,15,20",,
+t21_80_0.05_30_LEnKF_1_2_102_mask_2,t21,reference,"0,5,15,20",,
