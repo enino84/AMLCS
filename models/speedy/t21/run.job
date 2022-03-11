@@ -1,0 +1,11 @@
+echo 'Ready to execute the file'
+
+echo 'the executable file...'
+ls -l imp.exe
+
+time ./imp.exe 
+
+#fort.3 is the restart file in fortran units
+mv fort.10 ../output/exp_100/fort.3
+mv ensemble_member.nc ../output/exp_100/ensemble_member.nc
+
