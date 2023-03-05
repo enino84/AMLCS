@@ -194,3 +194,43 @@ class Lorenz96Model(DynamicalModel):
     def set_state(self, state):
         self.x = state
 ```
+
+# Class Diagram
+
++----------------+             +-------------------+              +-----------------+
+|grid_resolution |             |observation        |              |numerical_model  |
++----------------+             +-------------------+              +-----------------+
+|res_name        |             |err_obs: list      |              |path_method      |
++----------------+             |obs_plc: list      |              |gs: grid_resolution|
+|create_mesh()   |             |build_observational|              |Nens: int        |
+|compute_sub_domains()         |_network()         |define_relations()|par: dict       |
++----------------+             |build_synthetic_   |load_settings()   |                 |
+                               |_observations()    |                  |                 |
+                                                      |                  |                 |
+                                                      +------------------+                 |
+                                                         |perform_assimilation()        |
+                                                         |prepare_analysis()            |
+                                                         |prepare_background()          |
+                                                         |perform_forecast()            |
+                                                         +-----------------------------+
++-----------------+            +-------------------+
+|sequential_method|            |reference_solution|
++-----------------+            +-------------------+
+|method           |            |nm: numerical_model|
+|get_instance()   |            |M: int            |
+|perform_assimilation()        |x_ref: list         |
+|load_background_ensemble()    +-------------------+
+|check_time_store()|
++-----------------+
+
++----------------+            +------------------+
+|error_metric    |            |time_metric       |
++----------------+            +------------------+
+|nm: numerical_model|          |nm: numerical_model|
+|metric_type: str   |          |metric_type: str   |
+|M: int             |          |M: int             |
+|compute_error_step()|         |start_time()       |
+|store_all_results() |         |check_time()       |
++-------------------+         |store_all_results()|
+                               +-------------------+
+
