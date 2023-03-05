@@ -98,3 +98,48 @@ for k in range(0, M):
         
     seq_da.perform_forecast();
     ```
+    
+# Adding a new model
+ 
+## Incorporating Other DA Algorithms and Dynamical Models in AMLCS-DA Package
+
+The AMLCS-DA package provides a flexible framework for incorporating other data assimilation (DA) algorithms and dynamical models.
+
+## Adding a New DA Algorithm
+
+To add a new DA algorithm, you need to create a new class that inherits from the `SequentialAlgorithm` abstract class. This class should implement the following methods:
+
+- `prepare_background()`: prepares the background state for assimilation
+- `prepare_analysis(observation, time_step)`: prepares the analysis state for assimilation based on the current observation and time step
+- `perform_assimilation(observation)`: performs the assimilation step using the current observation
+- `perform_forecast()`: performs the forecast step
+
+## Adding a New Dynamical Model
+
+To add a new dynamical model, you need to create a new class that inherits from the `NumericalModel` abstract class. This class should implement the following methods:
+
+- `step_forward(state, time_step)`: steps forward the model state by the given time step
+- `define_relations(option)`: defines the relations between the state variables of the model
+- `load_settings(settings)`: loads the settings of the model
+
+## Example
+
+Here is an example of how to add a new DA algorithm and dynamical model in the AMLCS-DA package:
+
+```python
+from AMLCS.da.sequential_algorithm import SequentialAlgorithm
+from AMLCS.da.numerical_model import NumericalModel
+
+class MyAlgorithm(SequentialAlgorithm):
+    # Implement the required methods here
+
+class MyModel(NumericalModel):
+    # Implement the required methods here
+
+# Instantiate the new DA algorithm and dynamical model
+algorithm = MyAlgorithm()
+model = MyModel()
+
+# Use the new algorithm and model in the AMLCS-DA package
+da_system = AMLCS_DA(algorithm, model)
+
