@@ -197,6 +197,7 @@ class Lorenz96Model(DynamicalModel):
 
 # Class Diagram
 
+```css
 +----------------+             +-------------------+              +-----------------+
 |grid_resolution |             |observation        |              |numerical_model  |
 +----------------+             +-------------------+              +-----------------+
@@ -233,4 +234,4 @@ class Lorenz96Model(DynamicalModel):
 |store_all_results() |         |check_time()       |
 +-------------------+         |store_all_results()|
                                +-------------------+
-
+```
