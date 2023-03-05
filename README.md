@@ -11,3 +11,90 @@ If you use this repo, please cite the following paper:
 
 1. Nino-Ruiz, E. D., Guzman-Reyes, L. G., & Beltran-Arrieta, R. (2020). An adjoint-free four-dimensional variational data assimilation method via a modified Cholesky decomposition and an iterative Woodbury matrix formula. Nonlinear Dynamics, 99(3), 2441-2457.
 2. Nino-Ruiz, E. D., Sandu, A., & Deng, X. (2018). An ensemble Kalman filter implementation based on modified Cholesky decomposition for inverse covariance matrix estimation. SIAM Journal on Scientific Computing, 40(2), A867-A886.
+
+# Code Documentation
+
+## Description
+The following code defines several variables and objects necessary for a data assimilation process:
+
+- `gs`: an instance of `grid_resolution` class created with `res_name` parameter.
+- `data_obs`: a string of observed data separated by commas extracted from the `err_obs` column of `df_par` dataframe.
+- `err_obs`: a list of floating-point numbers created by converting the values in `data_obs`.
+- `plac_obs`: a string of observation positions separated by commas extracted from the `obs_plc` column of `df_par` dataframe.
+- `obs_plc`: a list of integers created by converting the values in `plac_obs`.
+- `ob`: an instance of `observation` class created with `err_obs` and `obs_plc` as parameters.
+- `nm`: an instance of `numerical_model` class created with `path_method`, `gs`, `Nens`, and `par` parameters.
+- `rs`: an instance of `reference_solution` class created with `nm` and `M` parameters.
+- `seq_da`: an instance of a class that inherits from `sequential_method` created with `nm`, `infla`, `Nens`, and `method` parameters.
+- `em_bck`: an instance of `error_metric` class created with `nm`, `"bck"`, and `M` as parameters.
+- `em_ana`: an instance of `error_metric` class created with `nm`, `"ana"`, and `M` as parameters.
+- `tm_bck`: an instance of `time_metric` class created with `nm`, `"bck"`, and `M` as parameters.
+- `tm_ana`: an instance of `time_metric` class created with `nm`, `"ana"`, and `M` as parameters.
+
+## Parameters
+- `res_name`: a string that defines the grid resolution.
+- `df_par`: a dataframe that contains observational and model parameters.
+- `path_method`: a string that defines the path to the numerical model.
+- `Nens`: an integer that defines the number of ensemble members.
+- `par`: a dictionary that contains model parameters.
+- `option_mask`: a string that defines the relation between state variables and model parameters.
+- `exp_settings`: a dictionary that contains experimental settings.
+- `args`: a dictionary that contains additional arguments.
+- `r`: a float that defines the sub-domain computation radius.
+- `M`: an integer that defines the number of assimilation cycles.
+- `infla`: a float that defines the inflation factor.
+- `method`: a string that defines the assimilation method.
+- `s`: a float that defines the observational noise standard deviation.
+- `list_k`: a list that contains the assimilation cycle numbers to store.
+
+## Example Usage
+```python
+gs = grid_resolution(res_name);
+data_obs = df_par['err_obs'].iloc[0].strip().split(',');
+err_obs = [float(v) for v in data_obs];
+plac_obs = df_par['obs_plc'].iloc[0].strip().split(',');
+obs_plc = [int(v) for v in plac_obs];
+ob = observation(err_obs, obs_plc);
+
+nm = numerical_model(path_method, gs, Nens, par=par);
+nm.define_relations(option=option_mask);
+nm.load_settings(exp_settings, args);
+     
+gs.create_mesh(nm);
+gs.compute_sub_domains(r);
+rs = reference_solution(nm, M);
+    
+seq_da = sequential_method(method).get_instance(nm, infla, Nens);
+    
+ob.build_observational_network(gs, nm, s=s);
+ob.build_synthetic_observations(nm, rs, M); 
+    
+em_bck = error_metric(nm, 'bck', M);
+em_ana = error_metric(nm, 'ana', M);
+tm_bck =  time_metric(nm, 'bck');
+tm_ana =  time_metric(nm, 'ana');
+    
+for k in range(0, M):
+    seq_da.load_background_ensemble();
+        
+    tm_bck.start_time();
+    seq_da.prepare_background();
+    tm_bck.check_time();
+        
+    tm_ana.start_time();
+    seq_da.prepare_analysis(ob, k);
+    seq_da.perform_assimilation(ob);
+    tm_ana.check_time();
+       
+    em_bck.compute_error_step(k, seq_da.XB, rs.x_ref[k]);
+    em_ana.compute_error_step(k, seq_da.XA, rs.x_ref[k]);
+        
+    em_bck.store_all_results();
+    em_ana.store_all_results();
+    tm_bck.store_all_results();
+    tm_ana.store_all_results();
+        
+    seq_da.check_time_store(k, list_k);
+        
+    seq_da.perform_forecast();
+    ```
