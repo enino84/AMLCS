@@ -198,3 +198,19 @@ class Lorenz96Model(DynamicalModel):
 # Class Diagram
 
 <img src="https://raw.githubusercontent.com/enino84/AMLCS/main/Class_Diagram_AMLCS.png">
+
+# Sequential Diagram
+
+This sequential diagram shows the steps of the AMLCS (Adaptive Multilevel Monte Carlo Localization and Assimilation System) algorithm. The AMLCS algorithm is a data assimilation method used in numerical weather prediction and other fields to combine simulation models and real-world observational data in order to produce more accurate predictions.
+
+The diagram begins with the user running the AMLCS program. The program first instantiates the numerical model (B), which is used to represent the simulated system being studied. The program then instantiates the grid resolution (C) to define the spatial resolution of the model. The grid resolution is then used to create a mesh and compute subdomains for the numerical model.
+
+The program then defines relations between the numerical model and the grid resolution. The program loads the settings for the experiment and instantiates the reference solution (E), which represents the "true" state of the system being simulated. The program also instantiates the sequential method (F), which is used to perform the data assimilation.
+
+Next, the user provides observational data to the program. The observation class (D) is used to build the observational network and generate synthetic observations.
+
+The program then enters a loop for each time step. At each time step, the sequential method loads the background ensemble, prepares the background, and checks the background time. The program then starts the analysis time and prepares the analysis using the observational data. The analysis is then performed by assimilating the observational data into the model using the observation class. The program then checks the analysis time and computes the error step using the error metric class (G). The error results are then stored, along with the time results, using the time metric class (H). The program then checks the time store and performs a forecast for the next time step.
+
+The loop continues until all time steps have been processed. Finally, the program executes the complete AMLCS algorithm and returns the results to the user.
+
+<img src="https://raw.githubusercontent.com/enino84/AMLCS/main/Seq_Diagram_AMLCS.png">
