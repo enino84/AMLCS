@@ -197,4 +197,4 @@ class Lorenz96Model(DynamicalModel):
 
 # Class Diagram
 
-<img src="https://aml-cs.github.io/Class_Diagram_AMLCS.png">
+<img src="https://raw.githubusercontent.com/enino84/AMLCS/main/Class_Diagram_AMLCS.png">
