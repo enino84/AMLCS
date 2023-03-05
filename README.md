@@ -97,7 +97,7 @@ for k in range(0, M):
     seq_da.check_time_store(k, list_k);
         
     seq_da.perform_forecast();
-    ```
+```
     
 # Adding a new model
  
@@ -142,4 +142,4 @@ model = MyModel()
 
 # Use the new algorithm and model in the AMLCS-DA package
 da_system = AMLCS_DA(algorithm, model)
-
+```
