@@ -143,3 +143,54 @@ model = MyModel()
 # Use the new algorithm and model in the AMLCS-DA package
 da_system = AMLCS_DA(algorithm, model)
 ```
+
+# Adding the Lorenz 96 model to AMLCS-DA:
+
+To add a new dynamical model to the AMLCS-DA package, you need to define the model equations and implement them as a class in the `dynamical_model.py` file. This class should inherit the abstract class `DynamicalModel` and implement the following methods:
+
+- `__init__(self, n)`: initialize the model parameters and state with the size `n`
+- `integrate(self, t0, tf, dt)`: integrate the model equations from `t0` to `tf` with time step `dt`
+- `get_state(self)`: return the current state of the model
+- `set_state(self, state)`: set the state of the model to `state`
+
+Once you have defined your new dynamical model class, you can use it in the AMLCS-DA package by specifying it as an argument to the `numerical_model` constructor. For example, if you have defined a Lorenz96 model in a class called `Lorenz96Model`, you can use it as follows:
+
+```python
+from amlcsda.numerical_model import numerical_model
+from my_dynamical_model import Lorenz96Model
+
+# Define the model parameters
+path_method = 'EnSRF'
+gs = 0.05
+Nens = 20
+par = {'F': 8.0, 'h': 1.0}
+
+# Create an instance of the Lorenz96 model
+model = Lorenz96Model(n=40)
+
+# Create an instance of the numerical model using the Lorenz96 model
+nm = numerical_model(path_method, gs, Nens, par=par, dynamical_model=model)
+
+# Run the model
+nm.run_model()
+```
+
+In this example, we create an instance of the Lorenz96Model class with n=40 and pass it as an argument to the numerical_model constructor. We then run the model using the run_model method of the numerical_model object.
+
+```python
+class Lorenz96Model(DynamicalModel):
+    def __init__(self, n):
+        self.n = n
+        self.F = 8.0
+        self.h = 1.0
+        self.x = np.zeros(self.n)
+        
+    def integrate(self, t0, tf, dt):
+        # Integration code here
+        
+    def get_state(self):
+        return self.x
+    
+    def set_state(self, state):
+        self.x = state
+```
