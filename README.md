@@ -197,7 +197,42 @@ class Lorenz96Model(DynamicalModel):
 
 # Class Diagram
 
+The class diagram represents the organization and interconnection of the classes within the AMLCS package. AMLCS is a Python toolbox for testing sequential Data Assimilation (DA) methods using the SPEEDY model, which is a well-known Atmospheric General Circulation model in the DA community.
+
+The classes in the diagram are divided into five categories: grid, numerical model, DA methods, input/output, and plot/covariance. The grid class contains a single Grid class that defines the grid resolution used in the numerical model. The numerical model category includes two classes: NumericalModel and ICTools. NumericalModel is the core class that defines the atmospheric model, while ICTools contains methods for creating initial conditions.
+
+The DA methods category includes four classes: DA, LETKF, LEKF, and ETKF. These classes implement well-known ensemble-based DA methods, such as the Local Ensemble Transform Kalman Filter (LETKF) and the Local Ensemble Kalman Filter (LEKF). The input/output category includes a single IO class that contains methods for reading and writing data. The plot/covariance category includes two classes: PlotTools and Covariance. PlotTools contains methods for visualizing data, while Covariance contains methods for computing the background error covariance matrix.
+
+Finally, the AMLCS package includes three scripts: AMLCS_PRE, AMLCS_MAIN, and AMLCS_POST, which are responsible for performing the preprocessing, assimilation, and post-processing steps, respectively. These scripts utilize the classes defined in the package to perform the various DA operations.
+
 <img src="https://raw.githubusercontent.com/enino84/AMLCS/main/Class_Diagram_AMLCS.png">
+
+## Class definitions
+
+The AMLCS-DA package includes the following classes:
+
+- `Grid`: Defines the spatial discretization of the domain using a specific grid resolution. It contains information about the domain size, grid spacing, and the number of grid points.
+- `NumericalModel`: Implements the forecast step of the DA cycle using the AT-GCM SPEEDY by default. It is responsible for integrating the model forward in time, creating initial conditions for the ensemble members, and generating the reference trajectory. This class also provides methods for collecting ensemble members, creating free runs, and performing the forecast step of the DA cycle.
+- `DA`: An abstract class that defines the basic structure of a DA method. It contains methods for updating the background state using the observation and the forecast error, and for computing the analysis error covariance matrix.
+- `LETKF`: A class that implements the Local Ensemble Transform Kalman Filter method, which uses the local transformation of the ensemble members to update the background state.
+- `LEKF`: A class that implements the Local Ensemble Kalman Filter method, which updates the background state using the ensemble mean and the perturbations around it.
+- `IO`: A class that provides methods for reading and writing input and output files. It includes methods for reading the configuration file, the observations file, and the output files.
+- `PlotTools`: A class that provides methods for generating plots of the results. It includes methods for plotting the time evolution of the analysis and forecast error, the spatial distribution of the analysis error, and the cross-section of the analysis error at different pressure levels.
+- `Covariance`: A class that defines the background error covariance matrix structure. It includes methods for computing the correlation matrix based on different assumptions about the error structure.
+- `AMLCS_PRE`: A class that defines the preprocessing step of the DA cycle. It reads the configuration file and sets up the initial conditions for the forecast and assimilation steps.
+- `AMLCS_MAIN`: A class that runs the main loop of the DA cycle. It reads the observations file and performs the forecast and assimilation steps for each time step.
+- `AMLCS_POST`: A class that postprocesses the output files. It generates plots of the results and computes the statistics of the analysis error.
+
+The relationships between the classes are as follows:
+
+- `Grid` is used by `NumericalModel` to define the spatial discretization of the domain.
+- `NumericalModel` is used by all the DA methods (`LETKF`, `LEKF`) to perform the forecast step and generate the initial conditions for the ensemble members.
+- `LETKF` and `LEKF` inherit from the abstract class `DA`, which defines the basic structure of a DA method.
+- `IO` is used by `AMLCS_PRE` and `AMLCS_MAIN` to read input files and write output files.
+- `PlotTools` is used by `AMLCS_MAIN` and `AMLCS_POST` to generate plots of the results.
+- `Covariance` is used by `LETKF` and `LEKF` to compute the background error covariance matrix.
+- `AMLCS_PRE` sets up the initial conditions for the forecast and assimilation steps, and `AMLCS_MAIN` performs the forecast and assimilation steps for each time step. `AMLCS_POST` postprocesses the output files generated by `AMLCS_MAIN`.
+
 
 # Sequential Diagram
 
