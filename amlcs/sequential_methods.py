@@ -165,7 +165,7 @@ class EnKF_MC_obs(ensemble_DA):
            
           H_spar = H.toarray();
           
-          P = spa.linalg.spsolve_triangular(Binv_sqrt, H_spar.T, lower=False, check_finite=False);
+          P = spa.linalg.spsolve_triangular(Binv_sqrt, H_spar.T, lower=False);
           
           Inno = R + P.T @ P;
 
@@ -173,7 +173,7 @@ class EnKF_MC_obs(ensemble_DA):
           
           #Q_temp = spa.linalg.spsolve_triangular(Binv_sqrt,Q_temp,lower=False);
           
-          DXa = spa.linalg.spsolve_triangular(Binv_sqrt.T, Q_temp, lower=True, check_finite=False);
+          DXa = spa.linalg.spsolve_triangular(Binv_sqrt.T, Q_temp, lower=True);
 
           XA = XB + DXa;  
           
