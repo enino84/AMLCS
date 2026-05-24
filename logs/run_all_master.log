@@ -1,0 +1,10 @@
+nohup: ignoring input
+>>> Lanzando run_all dentro de Docker (imagen: amlcs-speedy)...
+##################################################
+#  RUN ALL - 2 metodos (cada uno con su log)
+#  Logs en: /opt/Research_SPEEDY/logs
+#  Inicio:  2026-05-24 15:08:42
+##################################################
+
+######  >>> LETKF (amlcs_da_t21_1.csv)  <<<  ######
+       log individual: /opt/Research_SPEEDY/logs/LETKF_20260524_150842.log
