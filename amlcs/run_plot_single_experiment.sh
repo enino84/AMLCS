@@ -1,0 +1,3 @@
+python3 error_comparison_plots.py amlcs_error_comparison.csv
+python3 error_plots.py amlcs_single_error.csv
+python3 error_plots.py amlcs_single_error.csv
