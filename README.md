@@ -250,3 +250,236 @@ The program then enters a loop for each time step. At each time step, the sequen
 The loop continues until all time steps have been processed. Finally, the program executes the complete AMLCS algorithm and returns the results to the user.
 
 <img src="https://raw.githubusercontent.com/enino84/AMLCS/main/Seq_Diagram_AMLCS.png">
+
+---
+
+# Deployment & Reproducibility (Docker)
+
+This section documents how to build a self-contained environment for AMLCS-DA using Docker, and how to run single or batch experiments with automatic timing and per-method logs. It is intended for reproducing the SPEEDY experiments on a fresh Linux machine (local workstation, server, or a cloud VM such as Google Cloud).
+
+## Why Docker
+
+The SPEEDY model is compiled with `gfortran` and links against NetCDF-Fortran. Modern toolchains (gfortran 10+) are stricter than the compiler the code was originally written for, and the Python side pins to `numpy<2.0`. Docker freezes a known-good environment so the experiments run identically across machines, and avoids the concurrent-I/O issues seen when running the ensemble forecast over a Windows bind-mounted filesystem.
+
+## Repository layout expected at run time
+
+```
+AMLCS/
+├── Dockerfile
+├── run.sh                 # run a single method (with timing)
+├── run_all.sh             # run several methods in sequence (auto-Docker)
+├── amlcs/                 # Python DA code
+├── models/
+│   └── speedy/t21/        # SPEEDY Fortran sources + makefile
+├── to_run/                # experiment CSV configs and plotting scripts
+├── NLD_Paper/             # created at run time (pre-processing + results)
+└── logs/                  # created at run time (per-method logs)
+```
+
+## Makefile note for modern gfortran
+
+The SPEEDY `makefile` in `models/speedy/t21/` must include the flags
+`-fallow-argument-mismatch -std=legacy` so that gfortran 10+ treats the legacy
+F77 argument-rank mismatches in `read_write_netcdf.f` as warnings rather than
+hard errors. The compile flags line should read:
+
+```
+COMOTT1= -O3 -fdefault-real-8 -fconvert=big-endian -frecord-marker=4 -fallow-argument-mismatch -std=legacy
+```
+
+## The Dockerfile
+
+The image is based on Ubuntu 22.04 and installs the Fortran toolchain, NetCDF
+(C and Fortran bindings), and the Python scientific stack. The project itself is
+NOT copied into the image; it is bind-mounted at run time so that all outputs
+land on the host disk and persist after the container exits.
+
+```dockerfile
+FROM ubuntu:22.04
+
+ENV DEBIAN_FRONTEND=noninteractive \
+    PYTHONUNBUFFERED=1 \
+    LANG=C.UTF-8 \
+    LC_ALL=C.UTF-8
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        build-essential gfortran make git wget curl unzip ca-certificates \
+        pkg-config libnetcdf-dev libnetcdff-dev netcdf-bin libhdf5-dev \
+        libopenblas-dev liblapack-dev python3 python3-pip python3-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN ln -sf /usr/bin/python3 /usr/local/bin/python
+
+RUN pip3 install --no-cache-dir --upgrade pip setuptools wheel \
+ && pip3 install --no-cache-dir "numpy<2.0" scipy pandas scikit-learn matplotlib seaborn netCDF4
+
+ENV PROJECT_ROOT=/opt/Research_SPEEDY
+WORKDIR ${PROJECT_ROOT}
+
+RUN printf '#!/usr/bin/env bash\nset -e\ncd "${PROJECT_ROOT}"\nif [ -d "${PROJECT_ROOT}/to_run" ] && [ -d "${PROJECT_ROOT}/amlcs" ]; then\n  cp -ru "${PROJECT_ROOT}/to_run/." "${PROJECT_ROOT}/amlcs/"\nfi\ncd "${PROJECT_ROOT}/amlcs"\nexec "$@"\n' > /usr/local/bin/amlcs-entrypoint.sh \
+ && chmod +x /usr/local/bin/amlcs-entrypoint.sh
+
+ENTRYPOINT ["/usr/local/bin/amlcs-entrypoint.sh"]
+CMD ["bash"]
+```
+
+Build the image once:
+
+```bash
+cd /path/to/AMLCS
+docker build -t amlcs-speedy .
+```
+
+## Mapping the project into the container
+
+The entrypoint copies `to_run/*` into `amlcs/` (as the original instructions
+require) and then drops into `amlcs/`. The host project directory is mapped to
+the path the image expects via `-v`:
+
+```bash
+docker run --rm -it \
+  -v /path/to/AMLCS:/opt/Research_SPEEDY \
+  amlcs-speedy bash
+```
+
+Inside the container you are placed in `amlcs/` and can run the pipeline by hand:
+
+```bash
+python3 amlcs_pre.py amlcs_pre_t21.csv     # pre-processing (run once)
+python3 amlcs_da.py  amlcs_da_t21_2.csv    # LEnKF
+python3 amlcs_da.py  amlcs_da_t21_1.csv    # LETKF
+python3 amlcs_da.py  amlcs_da_t21_0.csv    # EnKF_MC_obs
+```
+
+## The CSV configuration files
+
+The experiment configs live in `to_run/` and `amlcs/`. The mapping between the
+provided DA config files and the assimilation method is:
+
+| Config file | Method |
+|-------------|--------|
+| `amlcs_da_t21_0.csv` | `EnKF_MC_obs` |
+| `amlcs_da_t21_1.csv` | `LETKF` |
+| `amlcs_da_t21_2.csv` | `LEnKF` |
+
+Key parameters in the pre-processing config (`amlcs_pre_t21.csv`):
+
+| Parameter | Meaning |
+|-----------|---------|
+| `Nens` | number of ensemble members |
+| `M` | number of assimilation cycles |
+| `res_name` | spectral resolution (`t21`, `t30`, ...) |
+| `per` | initial perturbation fraction |
+| `obs_steps` | model steps between observations |
+| `par` | enable parallel ensemble forecast (`True`/`False`) |
+
+Key parameters in the DA config (`amlcs_da_t21_*.csv`):
+
+| Parameter | Meaning |
+|-----------|---------|
+| `r` | local sub-domain radius (box of side `2r+1`) |
+| `s` | observational network spacing (one sensor every `s` grid points) |
+| `method` | assimilation method (`LEnKF`, `LETKF`, `EnKF_MC_obs`) |
+| `infla` | covariance inflation factor |
+| `err_obs` | per-variable observation error standard deviations |
+| `obs_plc` | per-variable observation placement flags (which variables are observed) |
+| `option_mask` | how state variables are grouped into blocks for the covariance |
+| `list_snapshots` | assimilation cycles for which global snapshots are stored |
+
+The pre-processing run produces a directory named
+`{res_name}_{Nens}_{per}_{M}` (e.g. `t21_80_0.05_30`) inside the folder given by
+`folder_prep`. All DA methods reuse this same pre-processing directory, so it
+only needs to be generated once.
+
+## Helper script: run.sh
+
+`run.sh` runs a single method. It auto-detects the project root (so it works
+from any directory), derives the pre-processing directory name from
+`amlcs_pre_t21.csv`, skips pre-processing if it already exists, and reports the
+wall-clock time of each phase.
+
+```bash
+./run.sh                      # LEnKF (default)
+./run.sh amlcs_da_t21_1.csv   # LETKF
+./run.sh amlcs_da_t21_0.csv   # EnKF_MC_obs
+```
+
+## Helper script: run_all.sh
+
+`run_all.sh` runs several methods in sequence. It re-launches itself inside the
+Docker container automatically (detected via the `AMLCS_IN_DOCKER` environment
+variable), so a single command on the host runs the whole batch without typing
+`docker run`. Each method writes its own detailed log under `logs/`, plus a
+consolidated `resumen_<timestamp>.log` with the timing of each method.
+
+```bash
+# from the host, in the project root:
+cd /path/to/AMLCS
+mkdir -p logs
+nohup ./run_all.sh > logs/run_all_master.log 2>&1 &
+```
+
+Monitor progress:
+
+```bash
+tail -f logs/run_all_master.log     # high-level progress + final summary
+tail -f logs/LETKF_*.log            # detailed log of a given method
+```
+
+The methods run strictly sequentially (one finishes before the next starts),
+while the 80-member ensemble forecast inside each method still runs in parallel
+when `par=True`.
+
+## Outputs
+
+For each method, a directory named
+`{prep_name}_{method}_{r}_{s}_{infla}_mask_{option_mask}` is created under
+`folder_prep`. It contains:
+
+- `results/` : per-variable RMSE for background (`*_bck.csv`) and analysis
+  (`*_ana.csv`), one row per assimilation cycle, one column per pressure level.
+- `time_snapshots/` : global mean states `xb{k}.nc` / `xa{k}.nc` for the cycles
+  listed in `list_snapshots`.
+- timing files `time_bck.csv` / `time_ana.csv` with the cost per cycle.
+
+These CSV files feed the plotting scripts in `to_run/`
+(`error_comparison_plots.py`, `error_plots.py`, `earth_plot.py`, etc.).
+
+## Running on a cloud VM (e.g. Google Cloud)
+
+On a native Linux VM the concurrent-I/O problem does not occur, so the parallel
+ensemble forecast (`par=True`) can be used safely. Typical workflow:
+
+```bash
+# 1. clone and patch the makefile
+git clone https://github.com/enino84/AMLCS.git
+cd AMLCS/models/speedy/t21
+sed -i 's|^COMOTT1=.*-frecord-marker=4$|COMOTT1= -O3 -fdefault-real-8 -fconvert=big-endian -frecord-marker=4 -fallow-argument-mismatch -std=legacy|' makefile
+cd ../../..
+
+# 2. build the image
+docker build -t amlcs-speedy .
+
+# 3. run all methods in the background, with logs
+mkdir -p logs
+nohup ./run_all.sh > logs/run_all_master.log 2>&1 &
+```
+
+Because the run is launched with `nohup` and the heavy work executes inside a
+detached Docker container, closing the SSH session does not stop the experiment.
+Reconnect later and inspect `logs/` or `NLD_Paper/` for results.
+
+## Troubleshooting
+
+- **`ModuleNotFoundError: No module named 'pandas'`** — the script was run on the
+  host instead of inside the container. Run it through Docker (or use
+  `run_all.sh`, which enters Docker automatically).
+- **`Fortran runtime error: End of file` in `cpl_land.f` during the forecast** —
+  concurrent reads/writes of the per-member restart files corrupted them. This
+  happens on bind-mounted non-native filesystems (e.g. Docker Desktop on
+  Windows). Use a native Linux filesystem, or set `par=False` in
+  `amlcs_pre_t21.csv` to force a sequential ensemble forecast.
+- **`Rank mismatch` warnings while compiling SPEEDY** — harmless; produced by the
+  legacy F77 NetCDF calls and silenced to warnings by `-fallow-argument-mismatch`.
+- **`rm: cannot remove '*.ctl'`** — harmless; the SPEEDY `compile.sh` performs a
+  pre-emptive cleanup before files exist.

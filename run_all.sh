@@ -24,8 +24,12 @@ STAMP="$(date '+%Y%m%d_%H%M%S')"
 RESUMEN="${LOG_DIR}/resumen_${STAMP}.log"
 
 METHODS=(
-    "LETKF:amlcs_da_t21_1.csv"
-    "EnKF_MC_obs:amlcs_da_t21_0.csv"
+    # "EnKF_MC_obs:amlcs_da_t21_0.csv"
+    # "LETKF:amlcs_da_t21_1.csv"
+    # "LEnKF:amlcs_da_t21_2.csv"
+    "EnKF_Sh_Binv_MSE:amlcs_da_t21_3.csv"
+    "EnKF_Sh_Binv_Stein:amlcs_da_t21_4.csv"
+    "EnKF_Sh_Binv_DA:amlcs_da_t21_5.csv"
 )
 
 fmt_time() {

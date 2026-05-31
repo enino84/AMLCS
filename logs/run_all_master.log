@@ -8,3 +8,7 @@ nohup: ignoring input
 
 ######  >>> LETKF (amlcs_da_t21_1.csv)  <<<  ######
        log individual: /opt/Research_SPEEDY/logs/LETKF_20260524_150842.log
+######  LETKF termino en 2h 34m 18.2s  ######
+
+######  >>> EnKF_MC_obs (amlcs_da_t21_0.csv)  <<<  ######
+       log individual: /opt/Research_SPEEDY/logs/EnKF_MC_obs_20260524_150842.log

@@ -1,2 +1,8 @@
 RESUMEN DE EJECUCION - 20260524_150842
 ==================================================
+
+Metodo : LETKF
+  CSV         : amlcs_da_t21_1.csv
+  Tiempo total: 2h 34m 18.2s
+    Asimilacion       : 2h 34m 17.2s
+  Log         : /opt/Research_SPEEDY/logs/LETKF_20260524_150842.log

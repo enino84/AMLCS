@@ -2,24 +2,30 @@
 """
 make_plots.py - Post-procesado consolidado de los experimentos AMLCS-DA.
 
-Recolecta los resultados de los tres metodos (EnKF_MC_obs, LETKF, LEnKF) desde
-runs/ y genera TODOS los plots en una sola carpeta runs/plots/ organizada:
+Recolecta los resultados de TODOS los metodos presentes en runs/ y genera
+todos los plots en una sola carpeta runs/plots/ organizada:
 
     runs/plots/
-    ├── comparison/      comparacion de los 3 metodos: log(l2) vs paso, por variable/nivel
+    ├── comparison/      comparacion de todos los metodos: log(l2) vs paso, por variable/nivel
     ├── vs_level/        RMSE vs nivel de presion (perfil vertical), por variable
     └── single/<metodo>/ analysis vs background vs NODA, por metodo/variable/nivel
 
+A diferencia de la version anterior (que comparaba solo 3 metodos fijos), este
+script AUTO-DETECTA todas las carpetas de experimentos validas dentro de runs/.
+Una carpeta se considera valida si contiene results/<var>_ana.csv.
+
 Uso:
-    python3 make_plots.py                          # usa la config por defecto (3 metodos t21)
+    python3 make_plots.py                          # auto-detecta todos los metodos en <proyecto>/runs
     python3 make_plots.py --runs /ruta/a/runs      # otra ubicacion de runs/
-    python3 make_plots.py --mc <carpeta_mc> --letkf <carpeta_letkf> --lenkf <carpeta_lenkf>
+    python3 make_plots.py --methods carpeta1,carpeta2,...   # lista explicita de carpetas
+    python3 make_plots.py --ref-method <carpeta>   # carpeta usada para el NODA de comparison (por defecto la 1ra)
 
 Es independiente del directorio desde el que se llama: detecta su propia ubicacion.
 No requiere Basemap.
 """
 
 import argparse
+import re
 from pathlib import Path
 
 import numpy as np
@@ -50,67 +56,96 @@ VAR_CODES = {
 }
 PSLVL = [30, 100, 200, 300, 500, 700, 850, 925]
 
-# Carpetas por defecto (las que generaste en runs/)
-DEFAULT_MC    = "t21_80_0.05_30_EnKF_MC_obs_1_2_102_mask_2"
-DEFAULT_LETKF = "t21_80_0.05_30_LETKF_1_2_102_mask_2"
-DEFAULT_LENKF = "t21_80_0.05_30_LEnKF_1_2_102_mask_2"
-DEFAULT_RES   = "t21"
-DEFAULT_M     = 30
+DEFAULT_RES = "t21"
+DEFAULT_M   = 30
+
+# Prefijo comun de los nombres de carpeta: t21_80_0.05_30_<METODO>_1_2_102_mask_2
+# Lo usamos para extraer una etiqueta corta y legible para la leyenda.
+_PREFIX_RE = re.compile(r"^t\d+_\d+_[\d.]+_\d+_(?P<method>.+?)_\d+_\d+_\d+_mask_\d+$")
 
 
 def _read(path):
     return pd.read_csv(path)
 
 
-# ----------------------------------------------------------------------
-# 1. Comparacion de los 3 metodos: log(l2) vs paso de asimilacion
-# ----------------------------------------------------------------------
-def plot_comparison(out_dir, ana_mc, ana_letkf, ana_lenkf, var, lvl, ppt):
-    s = str(lvl)
-    zero = pd.Series(ana_mc[s].values[0])
-    d_mc    = np.log(pd.concat([zero, ana_mc[s]], ignore_index=True))
-    d_letkf = np.log(pd.concat([zero, ana_letkf[s]], ignore_index=True))
-    d_lenkf = np.log(pd.concat([zero, ana_lenkf[s]], ignore_index=True))
-    fr = np.log(ppt.noda[var][lvl, :])
+def _short_label(folder_name):
+    """Genera una etiqueta corta y legible a partir del nombre de la carpeta."""
+    m = _PREFIX_RE.match(folder_name)
+    raw = m.group("method") if m else folder_name
+    # Normaliza: EnKF_MC_obs -> EnKF-MC-obs
+    return raw.replace("_", "-")
 
+
+def _is_valid_method_dir(path, sample_var="TG0"):
+    """Una carpeta es metodo valido si tiene results/<var>_ana.csv para alguna var."""
+    results = path / "results"
+    if not results.is_dir():
+        return False
+    for var in MODEL_VARS:
+        if (results / f"{var}_ana.csv").exists():
+            return True
+    return False
+
+
+def _discover_methods(runs, explicit=None):
+    """Devuelve lista de (label, path) de los metodos a procesar."""
+    if explicit:
+        names = [n.strip() for n in explicit.split(",") if n.strip()]
+        dirs = [runs / n for n in names]
+    else:
+        dirs = sorted(d for d in runs.iterdir()
+                      if d.is_dir() and d.name != "plots")
+    methods = []
+    for d in dirs:
+        if _is_valid_method_dir(d):
+            methods.append((_short_label(d.name), d))
+        else:
+            print(f"  (omitida, sin results/*_ana.csv) {d.name}")
+    return methods
+
+
+# ----------------------------------------------------------------------
+# 1. Comparacion de N metodos: log(l2) vs paso de asimilacion
+# ----------------------------------------------------------------------
+def plot_comparison(out_dir, methods_ana, var, lvl, ppt):
+    s = str(lvl)
     plt.figure(figsize=(9, 4))
-    plt.plot(d_mc,    label="EnKF-MC-obs")
-    plt.plot(d_letkf, label="LETKF")
-    plt.plot(d_lenkf, label="LEnKF")
+    for label, ana in methods_ana:
+        zero = pd.Series(ana[s].values[0])
+        d = np.log(pd.concat([zero, ana[s]], ignore_index=True))
+        plt.plot(d, label=label)
+    fr = np.log(ppt.noda[var][lvl, :])
     plt.plot(fr, color="k", label="NODA")
     plt.title(f"${VAR_CODES[var]}$ at {PSLVL[lvl]} mb")
     plt.ylabel(r"$\log(\ell_2)$")
     plt.xlabel("Assimilation step")
-    plt.legend(loc="best")
+    plt.legend(loc="best", fontsize=9)
     plt.tight_layout()
     plt.savefig(out_dir / f"error_{var}_{lvl}.png", bbox_inches="tight", dpi=120)
     plt.close()
 
 
 # ----------------------------------------------------------------------
-# 2. RMSE vs nivel de presion (perfil vertical)
+# 2. RMSE vs nivel de presion (perfil vertical) para N metodos
 # ----------------------------------------------------------------------
-def plot_vs_level(out_dir, ana_mc, ana_letkf, ana_lenkf, var):
-    rmse_mc, rmse_letkf, rmse_lenkf = [], [], []
-    pslvl_p = PSLVL[:]
-    for i in range(8):
-        idx = str(i)
-        if ("TRG" in var) and i < 2:
-            pslvl_p = PSLVL[2:]
-            continue
-        rmse_mc.append(np.sqrt(np.sum(ana_mc[idx] ** 2) / len(ana_mc[idx])))
-        rmse_letkf.append(np.sqrt(np.sum(ana_letkf[idx] ** 2) / len(ana_letkf[idx])))
-        rmse_lenkf.append(np.sqrt(np.sum(ana_lenkf[idx] ** 2) / len(ana_lenkf[idx])))
-
+def plot_vs_level(out_dir, methods_ana, var):
+    markers = ["o", "s", "^", "D", "v", "P", "X", "*", "<", ">"]
     plt.figure(figsize=(4, 6))
-    plt.plot(rmse_mc, pslvl_p, label="EnKF-MC-obs", marker="o")
-    plt.plot(rmse_letkf, pslvl_p, label="LETKF", marker="s")
-    plt.plot(rmse_lenkf, pslvl_p, label="LEnKF", marker="^")
+    for k, (label, ana) in enumerate(methods_ana):
+        rmse = []
+        pslvl_p = PSLVL[:]
+        for i in range(8):
+            idx = str(i)
+            if ("TRG" in var) and i < 2:
+                pslvl_p = PSLVL[2:]
+                continue
+            rmse.append(np.sqrt(np.sum(ana[idx] ** 2) / len(ana[idx])))
+        plt.plot(rmse, pslvl_p, label=label, marker=markers[k % len(markers)])
     plt.title(f"${VAR_CODES[var]}$")
     plt.ylabel("Pressure level (mb)")
     plt.xlabel("RMSE")
     plt.gca().invert_yaxis()
-    plt.legend(loc="best")
+    plt.legend(loc="best", fontsize=9)
     plt.tight_layout()
     plt.savefig(out_dir / f"verror_{var}.png", bbox_inches="tight", dpi=120)
     plt.close()
@@ -146,12 +181,13 @@ def main():
     script_dir = Path(__file__).resolve().parent          # .../AMLCS/amlcs
     project_root = script_dir.parent                        # .../AMLCS
 
-    p = argparse.ArgumentParser(description="Post-procesado consolidado AMLCS-DA")
+    p = argparse.ArgumentParser(description="Post-procesado consolidado AMLCS-DA (N metodos)")
     p.add_argument("--runs", default=str(project_root / "runs"),
                    help="Ruta a la carpeta runs/ (por defecto <proyecto>/runs)")
-    p.add_argument("--mc", default=DEFAULT_MC)
-    p.add_argument("--letkf", default=DEFAULT_LETKF)
-    p.add_argument("--lenkf", default=DEFAULT_LENKF)
+    p.add_argument("--methods", default=None,
+                   help="Lista explicita de carpetas separadas por coma (por defecto auto-detecta)")
+    p.add_argument("--ref-method", default=None,
+                   help="Carpeta usada para el NODA en comparison (por defecto la 1ra detectada)")
     p.add_argument("--res", default=DEFAULT_RES)
     p.add_argument("--M", type=int, default=DEFAULT_M)
     p.add_argument("--vars", default=None,
@@ -159,9 +195,12 @@ def main():
     args = p.parse_args()
 
     runs = Path(args.runs).resolve()
-    mc_path    = runs / args.mc
-    letkf_path = runs / args.letkf
-    lenkf_path = runs / args.lenkf
+
+    print(f"* runs      : {runs}")
+    print("* detectando metodos...")
+    methods = _discover_methods(runs, args.methods)
+    if not methods:
+        raise SystemExit("No se encontro ningun metodo valido (results/*_ana.csv) en runs/.")
 
     plots_root = runs / "plots"
     cmp_dir    = plots_root / "comparison"
@@ -171,22 +210,37 @@ def main():
 
     variables = MODEL_VARS if args.vars is None else args.vars.strip().split(",")
 
-    # NODA (free-run vs referencia) se calcula desde el experimento MC
+    # Metodo de referencia para el NODA de comparison (por defecto el 1ro).
+    ref_path = None
+    if args.ref_method:
+        ref_path = runs / args.ref_method
+    else:
+        ref_path = methods[0][1]
+
     gs = grid_resolution(args.res)
-    ppt = postpro_tools(args.res, gs, str(mc_path), args.M)
+    ppt = postpro_tools(args.res, gs, str(ref_path), args.M)
     ppt.compute_NODA()
 
-    print(f"* runs      : {runs}")
-    print(f"* EnKF_MC   : {args.mc}")
-    print(f"* LETKF     : {args.letkf}")
-    print(f"* LEnKF     : {args.lenkf}")
+    print(f"* metodos   : {len(methods)}")
+    for label, path in methods:
+        print(f"    - {label:20s}  ({path.name})")
+    print(f"* NODA ref  : {ref_path.name}")
     print(f"* plots     : {plots_root}")
     print("")
 
     for var in variables:
-        ana_mc    = _read(mc_path    / "results" / f"{var}_ana.csv")
-        ana_letkf = _read(letkf_path / "results" / f"{var}_ana.csv")
-        ana_lenkf = _read(lenkf_path / "results" / f"{var}_ana.csv")
+        # Carga analysis de todos los metodos para esta variable
+        methods_ana = []
+        for label, path in methods:
+            ana_file = path / "results" / f"{var}_ana.csv"
+            if not ana_file.exists():
+                print(f"  (aviso) falta {ana_file.name} en {label}, se omite para {var}")
+                continue
+            methods_ana.append((label, _read(ana_file)))
+
+        if not methods_ana:
+            print(f"* {var}: sin datos en ningun metodo, se salta")
+            continue
 
         # 1. comparacion por nivel
         for lvl in range(8):
@@ -194,23 +248,24 @@ def main():
                 break
             if ("TRG" in var) and lvl < 2:
                 continue
-            plot_comparison(cmp_dir, ana_mc, ana_letkf, ana_lenkf, var, lvl, ppt)
+            plot_comparison(cmp_dir, methods_ana, var, lvl, ppt)
 
         # 2. perfil vertical (no aplica a PSG, que es 2D)
         if "PSG" not in var:
-            plot_vs_level(lvl_dir, ana_mc, ana_letkf, ana_lenkf, var)
+            plot_vs_level(lvl_dir, methods_ana, var)
 
         # 3. single por metodo
-        for label, mpath, ana in [
-            ("EnKF_MC_obs", mc_path, ana_mc),
-            ("LETKF", letkf_path, ana_letkf),
-            ("LEnKF", lenkf_path, ana_lenkf),
-        ]:
+        for label, path in methods:
+            ana_file = path / "results" / f"{var}_ana.csv"
+            bck_file = path / "results" / f"{var}_bck.csv"
+            if not (ana_file.exists() and bck_file.exists()):
+                continue
             single_dir = plots_root / "single" / label
             single_dir.mkdir(parents=True, exist_ok=True)
-            bck = _read(mpath / "results" / f"{var}_bck.csv")
+            ana = _read(ana_file)
+            bck = _read(bck_file)
             # cada metodo usa su propio NODA
-            ppt_m = postpro_tools(args.res, gs, str(mpath), args.M)
+            ppt_m = postpro_tools(args.res, gs, str(path), args.M)
             ppt_m.compute_NODA()
             for lvl in range(8):
                 if ("PSG" in var) and lvl > 0:

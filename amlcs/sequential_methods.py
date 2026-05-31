@@ -5,7 +5,14 @@ import scipy.sparse as spa
 import pandas as pd
 import time
 from netCDF4 import Dataset
-from commons_utils import compute_modified_Cholesky_decomposition
+from commons_utils import (
+    compute_modified_Cholesky_decomposition,
+    compute_modified_Cholesky_precision,
+    compute_alpha_mse,
+    compute_alpha_stein,
+    compute_alpha_da,
+    compute_pseudo_inverse_factor,
+)
 
 
 ##########################################################################################
@@ -403,6 +410,171 @@ class LEnKF(ensemble_DA):
 ##########################################################################################
 ##########################################################################################
 ##########################################################################################
+# Shrinkage based on inverse covariance (precision-space shrinkage).
+#
+# Background-error precision estimated as a convex combination of two
+# precision estimators:
+#       Binv_shrunk(alpha) = alpha*Binv_(1) + (1-alpha)*Binv_(2),  alpha in [0,1].
+# The analysis update is solved in precision-space (same normal equations as
+# EnKF_MC_obs):
+#       (Binv_shrunk + H^T R^{-1} H) DXa = H^T R^{-1} (Ys - H XB).
+#
+# Three criteria choose alpha (one class each):
+#   - EnKF_Sh_Binv_MSE   : Frobenius MSE between two modified-Cholesky targets
+#                          at radii (r, r_wide).
+#   - EnKF_Sh_Binv_Stein : Stein loss between modified-Cholesky (radius r) and
+#                          the truncated-SVD pseudo-inverse precision W W^T.
+#   - EnKF_Sh_Binv_DA    : DA-aware (minimises tr of posterior covariance),
+#                          same two estimators as Stein.
+#
+# Reference: Nino-Ruiz, Sandu & Deng (2018), SIAM J. Sci. Comput. 40(2), and
+# the precision-space shrinkage companion paper.
+##########################################################################################
+##########################################################################################
+##########################################################################################
+class _EnKF_Shrinkage_Binv(ensemble_DA):
+    """Common machinery for precision-space shrinkage filters.
+
+    Subclasses only implement :meth:`_compute_shrunk_precision`, which returns
+    the (sparse or dense) shrunk precision matrix ``Binv`` for one block.
+    """
+
+    # wide radius for the MSE criterion; ignored by Stein/DA.
+    r_wide = 5;
+    # relative tolerance for the truncated-SVD pseudo-inverse (Stein/DA).
+    rtol_pseudo_inverse = 0.25;
+    # threshold used in the modified-Cholesky regressions.
+    chol_thr = 0.15;
+
+    def prepare_background(self):
+        mask_cor = self.nm.mask_cor;
+        Nens = self.Nens;
+        self.XB_map = [];
+        gr = self.nm.gs;
+        # second (wider) predecessor set only needed by the MSE criterion
+        needs_wide = (self.criterion == 'mse');
+        lpr_wide = gr.compute_lpr_for_radius(self.r_wide) if needs_wide else [None]*len(mask_cor);
+        for msk_cor, pre_info, pre_info_wide in zip(mask_cor, gr.lpr, lpr_wide):
+            XB_block = self.get_ensemble_block(msk_cor);
+            xb_block = XB_block.mean(axis=1).reshape(-1,1);
+            DX_block = XB_block - xb_block;
+            self.XB_map.append({
+                'XB_b': XB_block,
+                'xb_b': xb_block,
+                'DX_b': DX_block,
+                'pre_b': pre_info,
+                'pre_wide_b': pre_info_wide,
+            });
+
+    def prepare_analysis(self, ob, k, args=None):
+        self.Ys = [];
+        Nens = self.Nens;
+        mask_cor = self.nm.mask_cor;
+        N_blocks = len(mask_cor);
+        for block in range(0, N_blocks):
+            Ys_block = ob.get_perturbed_observations(block, k, Nens);
+            self.Ys.append(Ys_block);
+
+    def perform_assimilation(self, ob):
+        self.XA_map = [];
+        self.alphas = [];
+        for XB_info, Ys_block, R_info, H_block in zip(self.XB_map, self.Ys, ob.obs_R_sparse, ob.obs_H_sparse):
+            XB_block = XB_info['XB_b'];
+            DX_block = XB_info['DX_b'];
+            R_block  = R_info['R'];
+            Binv, alpha = self._compute_shrunk_precision(XB_info, H_block, R_block);
+            self.alphas.append(alpha);
+            XA_block = self.perform_assimilation_block(XB_block, Binv, H_block, R_block, Ys_block);
+            XA_block = self.covariance_inflation(XA_block);
+            self.XA_map.append(XA_block);
+        if self.test == 1:
+            print('* ENDJ - {0} shrinkage weights alpha = {1}'.format(self.criterion, self.alphas));
+        self.map_vector_states();
+
+    def _build_HtRinvH(self, H, R):
+        """H^T R^{-1} H as a sparse matrix (R is sparse diagonal)."""
+        Rinv = spa.diags(1.0/R.diagonal());
+        return (H.T @ (Rinv @ H)).tocsc();
+
+    def perform_assimilation_block(self, XB, Binv, H, R, Ys):
+        Ds = Ys - H @ XB;
+        Rinv = spa.diags(1.0/R.diagonal());
+        HtRinvH = (H.T @ (Rinv @ H));
+        HtRinvD = H.T @ (Rinv @ Ds);
+        if hasattr(HtRinvD, 'toarray'):
+            HtRinvD = HtRinvD.toarray();
+        IN = Binv + HtRinvH;
+        if spa.issparse(IN):
+            DXa = spa.linalg.spsolve(IN.tocsc(), np.asarray(HtRinvD));
+            if DXa.ndim == 1:
+                DXa = DXa.reshape(-1, 1);
+        else:
+            DXa = np.linalg.solve(np.asarray(IN), np.asarray(HtRinvD));
+        XA = XB + DXa;
+        return XA;
+
+    def _compute_shrunk_precision(self, XB_info, H, R):
+        raise NotImplementedError;
+
+
+class EnKF_Sh_Binv_MSE(_EnKF_Shrinkage_Binv):
+    """Frobenius-MSE shrinkage between two modified-Cholesky precisions."""
+    criterion = 'mse';
+
+    def _compute_shrunk_precision(self, XB_info, H, R):
+        DX = XB_info['DX_b'];
+        n = DX.shape[0];
+        pre_narrow = XB_info['pre_b'];
+        pre_wide   = XB_info['pre_wide_b'];
+        Bs1 = compute_modified_Cholesky_precision(DX, pre_narrow, thr=self.chol_thr);
+        Bs2 = compute_modified_Cholesky_precision(DX, pre_wide,   thr=self.chol_thr);
+        Binv1 = (Bs1 @ Bs1.T).tocsr();
+        Binv2 = (Bs2 @ Bs2.T).tocsr();
+        r1 = self.nm.gs.r;
+        r2 = self.r_wide;
+        alpha = compute_alpha_mse(Binv1, Binv2, n, r1, r2);
+        Binv = (alpha*Binv1 + (1.0-alpha)*Binv2).tocsc();
+        return Binv, alpha;
+
+
+class EnKF_Sh_Binv_Stein(_EnKF_Shrinkage_Binv):
+    """Stein-loss shrinkage between modified-Cholesky and SVD precisions."""
+    criterion = 'stein';
+
+    def _compute_shrunk_precision(self, XB_info, H, R):
+        DX = XB_info['DX_b'];
+        n, N = DX.shape;
+        pre_narrow = XB_info['pre_b'];
+        Bs = compute_modified_Cholesky_precision(DX, pre_narrow, thr=self.chol_thr);
+        Binv_mc = (Bs @ Bs.T).tocsr();
+        W, sk = compute_pseudo_inverse_factor(DX, rtol=self.rtol_pseudo_inverse);
+        alpha = compute_alpha_stein(Binv_mc, W, sk, N);
+        Pseu = spa.csr_matrix(W @ W.T) if W.shape[1] > 0 else spa.csr_matrix((n, n));
+        Binv = (alpha*Binv_mc + (1.0-alpha)*Pseu).tocsc();
+        return Binv, alpha;
+
+
+class EnKF_Sh_Binv_DA(_EnKF_Shrinkage_Binv):
+    """DA-aware shrinkage (minimises trace of posterior covariance)."""
+    criterion = 'da';
+
+    def _compute_shrunk_precision(self, XB_info, H, R):
+        DX = XB_info['DX_b'];
+        n, N = DX.shape;
+        pre_narrow = XB_info['pre_b'];
+        Bs = compute_modified_Cholesky_precision(DX, pre_narrow, thr=self.chol_thr);
+        Binv_mc = (Bs @ Bs.T).tocsr();
+        W, sk = compute_pseudo_inverse_factor(DX, rtol=self.rtol_pseudo_inverse);
+        HtRinvH = self._build_HtRinvH(H, R);
+        alpha = compute_alpha_da(Binv_mc, W, HtRinvH, n);
+        Pseu = spa.csr_matrix(W @ W.T) if W.shape[1] > 0 else spa.csr_matrix((n, n));
+        Binv = (alpha*Binv_mc + (1.0-alpha)*Pseu).tocsc();
+        return Binv, alpha;
+
+
+##########################################################################################
+##########################################################################################
+##########################################################################################
 # General factory - sequential ensemble data assimilation
 ##########################################################################################
 ##########################################################################################
@@ -418,6 +590,10 @@ class sequential_method:
           if self.method_name=='EnKF_MC_obs': return EnKF_MC_obs(nm, infla, Nens);
           if self.method_name=='LETKF': return LETKF(nm, infla, Nens);
           if self.method_name=='LEnKF': return LEnKF(nm, infla, Nens);
+          if self.method_name=='EnKF_Sh_Binv_MSE': return EnKF_Sh_Binv_MSE(nm, infla, Nens);
+          if self.method_name=='EnKF_Sh_Binv_Stein': return EnKF_Sh_Binv_Stein(nm, infla, Nens);
+          if self.method_name=='EnKF_Sh_Binv_DA': return EnKF_Sh_Binv_DA(nm, infla, Nens);
+          raise ValueError('* ENDJ - Unknown method: {0}'.format(self.method_name));
           
 
 

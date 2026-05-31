@@ -1,0 +1,12 @@
+RESUMEN DE EJECUCION - 20260524_205452
+==================================================
+
+Metodo : EnKF_MC_obs
+  CSV         : amlcs_da_t21_0.csv
+  Tiempo total: 30m 26.8s
+    Asimilacion       : 30m 25.9s
+  Log         : /opt/Research_SPEEDY/logs/EnKF_MC_obs_20260524_205452.log
+
+==================================================
+TOTAL (todos los metodos): 30m 26.8s
+Fin: 2026-05-24 21:25:18

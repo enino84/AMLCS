@@ -1,0 +1,24 @@
+RESUMEN DE EJECUCION - 20260525_004008
+==================================================
+
+Metodo : EnKF_Sh_Binv_MSE
+  CSV         : amlcs_da_t21_3.csv
+  Tiempo total: 2h 27m 22.8s
+    Asimilacion       : 2h 27m 21.9s
+  Log         : /opt/Research_SPEEDY/logs/EnKF_Sh_Binv_MSE_20260525_004008.log
+
+Metodo : EnKF_Sh_Binv_Stein
+  CSV         : amlcs_da_t21_4.csv
+  Tiempo total: 1h 11m 22.3s
+    Asimilacion       : 1h 11m 21.4s
+  Log         : /opt/Research_SPEEDY/logs/EnKF_Sh_Binv_Stein_20260525_004008.log
+
+Metodo : EnKF_Sh_Binv_DA
+  CSV         : amlcs_da_t21_5.csv
+  Tiempo total: 2h 43m 43.4s
+    Asimilacion       : 2h 43m 42.5s
+  Log         : /opt/Research_SPEEDY/logs/EnKF_Sh_Binv_DA_20260525_004008.log
+
+==================================================
+TOTAL (todos los metodos): 6h 22m 28.5s
+Fin: 2026-05-25 07:02:36

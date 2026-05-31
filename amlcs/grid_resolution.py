@@ -98,12 +98,27 @@ class grid_resolution:
               
       
       def compute_sub_domains(self, r):
+          self.r = r;
           self.lbo = [];
           self.lpr = [];
           for me in self.mesh:
               lbo_info, pre_info = self.compute_local_boxes(me, r);
               self.lbo.append(lbo_info);
               self.lpr.append(pre_info);
+
+      def compute_lpr_for_radius(self, r):
+          """Predecessor information (lpr) for an arbitrary radius r.
+
+          Returns a list (one entry per block) of pre_info tuples in the same
+          format as ``self.lpr``. Used by the two-radius MSE shrinkage method,
+          which needs a second (wider) radius in addition to the main one set
+          by :meth:`compute_sub_domains`.
+          """
+          lpr_r = [];
+          for me in self.mesh:
+              _, pre_info = self.compute_local_boxes(me, r);
+              lpr_r.append(pre_info);
+          return lpr_r;
               
                                  
  
